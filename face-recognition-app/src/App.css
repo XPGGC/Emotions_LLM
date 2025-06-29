@@ -1162,7 +1162,78 @@ body {
   }
   
   .voice-button {
-    font-size: 11px;
-    padding: 5px 10px;
+    font-size: 0.75rem;
+    padding: 0.25rem 0.5rem;
+  }
+}
+
+/* 摄像头相关样式 */
+.camera-controls {
+  margin-bottom: 1.5rem;
+  padding: 1rem;
+  background: var(--card-background);
+  border-radius: 0.75rem;
+  border: 1px solid var(--border-color);
+  box-shadow: 0 2px 8px var(--shadow-color);
+}
+
+.camera-buttons {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  margin-bottom: 1rem;
+}
+
+.camera-buttons .btn {
+  flex: 1;
+  min-width: 120px;
+  font-size: 0.875rem;
+  padding: 0.75rem 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+}
+
+.camera-preview {
+  margin-bottom: 1.5rem;
+  text-align: center;
+}
+
+.camera-preview video {
+  border-radius: 0.75rem;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  border: 2px solid var(--border-color);
+  background: var(--background-color);
+}
+
+.camera-status {
+  margin-top: 0.75rem;
+  padding: 0.5rem 1rem;
+  background: var(--background-color);
+  border: 1px solid var(--border-color);
+  border-radius: 0.5rem;
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+}
+
+.camera-status p {
+  margin: 0.25rem 0;
+  font-family: monospace;
+}
+
+/* 响应式设计 */
+@media (max-width: 768px) {
+  .camera-buttons {
+    flex-direction: column;
+  }
+  
+  .camera-buttons .btn {
+    min-width: auto;
+  }
+  
+  .camera-preview video {
+    max-width: 100%;
+    height: auto;
   }
 }

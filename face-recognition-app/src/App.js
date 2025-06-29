@@ -26,6 +26,12 @@ function App() {
     const [currentEmotion, setCurrentEmotion] = useState('');
     const [showSessionSetup, setShowSessionSetup] = useState(true);
 
+    // 摄像头相关状态
+    const [isCameraOn, setIsCameraOn] = useState(false);
+    const [cameraStream, setCameraStream] = useState(null);
+    const [videoRef, setVideoRef] = useState(null);
+    const [canvasRef, setCanvasRef] = useState(null);
+
     // 语音相关状态
     const [isSpeaking, setIsSpeaking] = useState(false);
     const [isListening, setIsListening] = useState(false);
@@ -558,6 +564,54 @@ function App() {
         scrollToBottom();
     }, [chatHistory, isStreaming]);
 
+    // 摄像头相关useEffect
+    useEffect(() => {
+        // 组件卸载时清理摄像头
+        return () => {
+            if (cameraStream) {
+                cameraStream.getTracks().forEach(track => track.stop());
+            }
+        };
+    }, [cameraStream]);
+
+    // 设置视频源
+    useEffect(() => {
+        if (videoRef && cameraStream) {
+            console.log('useEffect: 设置视频源');
+            videoRef.srcObject = cameraStream;
+            
+            // 添加事件监听
+            const video = videoRef;
+            
+            const handleLoadedMetadata = () => {
+                console.log('视频元数据加载完成');
+            };
+            
+            const handleCanPlay = () => {
+                console.log('视频可以播放');
+                video.play().catch(error => {
+                    console.error('自动播放失败:', error);
+                });
+            };
+            
+            const handleError = (error) => {
+                console.error('视频错误:', error);
+                setError('视频加载失败');
+            };
+            
+            video.addEventListener('loadedmetadata', handleLoadedMetadata);
+            video.addEventListener('canplay', handleCanPlay);
+            video.addEventListener('error', handleError);
+            
+            // 清理函数
+            return () => {
+                video.removeEventListener('loadedmetadata', handleLoadedMetadata);
+                video.removeEventListener('canplay', handleCanPlay);
+                video.removeEventListener('error', handleError);
+            };
+        }
+    }, [videoRef, cameraStream]);
+
     // 原有的聊天功能（保留兼容性）
     const handleChat = async () => {
         if (!message.trim() || isLoading) return;
@@ -623,25 +677,13 @@ function App() {
 
     // 获取语音描述
     const getVoiceDescription = (voice) => {
-        if (!voice) return '';
+        const lang = voice.lang || '';
+        const isChinese = lang.includes('zh') || lang.includes('cmn');
+        const gender = voice.name.toLowerCase().includes('female') || 
+                      voice.name.toLowerCase().includes('xiaoxiao') || 
+                      voice.name.toLowerCase().includes('xiaoyi') ? '女声' : '男声';
         
-        let description = voice.name;
-        
-        // 添加语言信息
-        if (voice.lang.includes('zh') || voice.lang.includes('cmn')) {
-            description += ' (中文)';
-        } else if (voice.lang.includes('en')) {
-            description += ' (英文)';
-        }
-        
-        // 添加语音质量信息
-        if (voice.name.toLowerCase().includes('natural') || 
-            voice.name.toLowerCase().includes('premium') ||
-            voice.name.toLowerCase().includes('enhanced')) {
-            description += ' - 高质量';
-        }
-        
-        return description;
+        return `${voice.name} (${isChinese ? '中文' : '英文'}, ${gender})`;
     };
 
     // 推荐语音列表
@@ -657,6 +699,134 @@ function App() {
         'Alex',
         'Victoria'
     ];
+
+    // 摄像头相关函数
+    const startCamera = async () => {
+        try {
+            console.log('开始请求摄像头权限...');
+            
+            // 先检查浏览器支持
+            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                throw new Error('浏览器不支持getUserMedia API');
+            }
+            
+            const stream = await navigator.mediaDevices.getUserMedia({ 
+                video: { 
+                    width: { ideal: 640 }, 
+                    height: { ideal: 480 },
+                    facingMode: 'user' // 使用前置摄像头
+                } 
+            });
+            
+            console.log('摄像头权限获取成功:', stream);
+            console.log('视频轨道:', stream.getVideoTracks());
+            
+            setCameraStream(stream);
+            setIsCameraOn(true);
+            setError('');
+            
+            // 等待视频元素准备好
+            setTimeout(() => {
+                if (videoRef) {
+                    console.log('设置视频源...');
+                    videoRef.srcObject = stream;
+                    
+                    // 强制播放
+                    videoRef.play().then(() => {
+                        console.log('视频开始播放');
+                    }).catch(error => {
+                        console.error('视频播放失败:', error);
+                        setError('视频播放失败: ' + error.message);
+                    });
+                }
+            }, 100);
+            
+        } catch (error) {
+            console.error('摄像头启动失败:', error);
+            let errorMessage = '摄像头启动失败';
+            
+            if (error.name === 'NotAllowedError') {
+                errorMessage = '摄像头权限被拒绝，请允许浏览器访问摄像头';
+            } else if (error.name === 'NotFoundError') {
+                errorMessage = '未找到摄像头设备';
+            } else if (error.name === 'NotReadableError') {
+                errorMessage = '摄像头被其他应用占用';
+            } else if (error.name === 'OverconstrainedError') {
+                errorMessage = '摄像头不支持请求的分辨率';
+            } else {
+                errorMessage = '摄像头启动失败: ' + error.message;
+            }
+            
+            setError(errorMessage);
+        }
+    };
+
+    const stopCamera = () => {
+        if (cameraStream) {
+            cameraStream.getTracks().forEach(track => track.stop());
+            setCameraStream(null);
+        }
+        setIsCameraOn(false);
+    };
+
+    const captureImage = () => {
+        if (!videoRef || !canvasRef || !isCameraOn) {
+            console.log('摄像头未就绪，无法捕获图像');
+            return;
+        }
+        
+        const video = videoRef;
+        const canvas = canvasRef;
+        
+        // 检查视频是否就绪
+        if (video.readyState !== video.HAVE_ENOUGH_DATA) {
+            console.log('视频数据不足，等待下一帧');
+            return;
+        }
+        
+        // 检查视频尺寸
+        if (video.videoWidth === 0 || video.videoHeight === 0) {
+            console.log('视频尺寸无效，等待视频加载');
+            return;
+        }
+        
+        const context = canvas.getContext('2d');
+        
+        // 设置canvas尺寸与视频相同
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        
+        try {
+            // 绘制视频帧到canvas
+            context.drawImage(video, 0, 0, canvas.width, canvas.height);
+            
+            // 将canvas转换为base64图片
+            const imageData = canvas.toDataURL('image/jpeg', 0.8);
+            setImage(imageData);
+            
+            // 自动检测表情
+            handleDetectFaceFromImage(imageData);
+        } catch (error) {
+            console.error('图像捕获失败:', error);
+            setError('图像捕获失败，请重试');
+        }
+    };
+
+    const handleDetectFaceFromImage = async (imageData) => {
+        if (!imageData || isLoading) return;
+        setIsLoading(true);
+        setError('');
+        try {
+            const response = await axios.post('http://127.0.0.1:5000/detect_face', { image: imageData });
+            setEmotionResult(response.data.result);
+            setCurrentEmotion(response.data.result);
+        } catch (error) {
+            console.error('表情检测失败:', error);
+            setError('表情检测失败，请重试');
+        } finally {
+            setIsLoading(false);
+        }
+    };
 
     const clearChat = () => {
         setChatHistory([]);
@@ -980,6 +1150,100 @@ function App() {
                 
                 <div className="emotion-section">
                     <h2>表情识别</h2>
+                    
+                    {/* 摄像头控制区域 */}
+                    <div className="camera-controls">
+                        <div className="camera-buttons">
+                            {!isCameraOn ? (
+                                <button 
+                                    onClick={startCamera}
+                                    className="btn primary"
+                                    disabled={isLoading}
+                                >
+                                    📷 开启摄像头
+                                </button>
+                            ) : (
+                                <>
+                                    <button 
+                                        onClick={stopCamera}
+                                        className="btn secondary"
+                                    >
+                                        🛑 关闭摄像头
+                                    </button>
+                                    
+                                    <button 
+                                        onClick={captureImage}
+                                        className="btn primary"
+                                        disabled={isLoading}
+                                    >
+                                        📸 拍照
+                                    </button>
+                                    
+                                    <button 
+                                        onClick={() => {
+                                            console.log('视频状态:', videoRef?.readyState);
+                                            console.log('视频尺寸:', videoRef?.videoWidth, 'x', videoRef?.videoHeight);
+                                            console.log('摄像头流:', cameraStream);
+                                        }}
+                                        className="btn secondary"
+                                    >
+                                        🔍 调试信息
+                                    </button>
+                                    
+                                    <button 
+                                        onClick={() => {
+                                            if (videoRef && cameraStream) {
+                                                console.log('强制刷新视频...');
+                                                videoRef.srcObject = null;
+                                                setTimeout(() => {
+                                                    videoRef.srcObject = cameraStream;
+                                                    videoRef.play().catch(console.error);
+                                                }, 100);
+                                            }
+                                        }}
+                                        className="btn secondary"
+                                    >
+                                        🔄 刷新视频
+                                    </button>
+                                </>
+                            )}
+                        </div>
+                    </div>
+                    
+                    {/* 摄像头预览 */}
+                    {isCameraOn && (
+                        <div className="camera-preview">
+                            <video
+                                ref={setVideoRef}
+                                autoPlay
+                                playsInline
+                                muted
+                                controls={false}
+                                style={{ 
+                                    width: '100%', 
+                                    maxWidth: '400px', 
+                                    height: '300px',
+                                    backgroundColor: '#000',
+                                    border: '2px solid #ccc',
+                                    borderRadius: '8px'
+                                }}
+                            />
+                            <canvas
+                                ref={setCanvasRef}
+                                style={{ display: 'none' }}
+                            />
+                            
+                            {/* 摄像头状态信息 */}
+                            <div className="camera-status">
+                                <p>摄像头状态: {videoRef && videoRef.readyState === videoRef.HAVE_ENOUGH_DATA ? '✅ 就绪' : '⏳ 加载中...'}</p>
+                                {videoRef && (
+                                    <p>视频尺寸: {videoRef.videoWidth} x {videoRef.videoHeight}</p>
+                                )}
+                                <p>流状态: {cameraStream ? '✅ 已连接' : '❌ 未连接'}</p>
+                            </div>
+                        </div>
+                    )}
+                    
                     <div className="upload-section">
                         <div className="image-preview">
                             {image ? (
