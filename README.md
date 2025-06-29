@@ -29,12 +29,7 @@
 - 麦克风设备（语音功能）
 
 ### 配置文件设置
-1. 复制示例配置文件：
-```bash
-cp config.env.example config.env
-```
-
-2. 编辑 `config.env` 文件，填入您的API密钥（可选）
+1. 编辑 `config.env` 文件，填入您的API密钥（可选）
 
 ### 一键启动
 ```bash
